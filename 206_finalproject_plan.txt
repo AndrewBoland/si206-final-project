@@ -68,7 +68,7 @@ This method is useful for showing the user the title and director of a movie in 
 
 ANOTHER METHOD:
 - What will the name of the method be?
-getActors
+get_actors
 
 
 - What will the method do?
