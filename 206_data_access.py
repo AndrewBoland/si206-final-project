@@ -70,6 +70,7 @@ def get_twitter_user_data(user):
     if user in CACHE_DICTION["Twitter"]["User"]:
         response = CACHE_DICTION["Twitter"]["User"][user]
     else:
+        print("Test")
         response = api.get_user(user)
         CACHE_DICTION["Twitter"]["User"][user] = response
 
@@ -78,8 +79,6 @@ def get_twitter_user_data(user):
         cache_file.close()
     return response
 
-
-
 #Write a function to get and cache data from OMDB
 def get_OMDB_data(search_term):
     if search_term in CACHE_DICTION["OMDB"]:
@@ -87,7 +86,7 @@ def get_OMDB_data(search_term):
     else:
         base_url = "http://www.omdbapi.com/"
         params = {}
-        params["t"] = "the dark knight rises"
+        params["t"] = search_term
         r = requests.get(base_url, params=params)
         response = json.loads(r.text)
 
@@ -96,9 +95,6 @@ def get_OMDB_data(search_term):
         cache_file.write(json.dumps(CACHE_DICTION))
         cache_file.close()
     return response
-
-
-#TODO write code to invoke each of the above functions and put info into a variable
 
 
 
@@ -110,58 +106,113 @@ def get_OMDB_data(search_term):
 
     #Define the instance variables, title, director, imdb rating, languages and actors here
 
-#Define the Tweet class here
-
-#Define the TwitterUser class here
-
-
-
-
-
-#Define the Movie class here
-
-    #Define the instance variables, title, director and actors here
-
     #Implement the __str__ class method, it takes no input and returns a readable Movie string
 
     #Implement get_actors class method, it takes an integer input and returns that many actors
 
+#Define the Tweet class here, the variables and methods are still to be determined
 
-
-
-
-#Make list of movie search terms and put into a variable
-
-
-
-
-
-#Make requests to OMDB and store in a list
+#Define the TwitterUser class here, the variables and methods are still to be determined
 
 
 
 
 
-#Make invocations to twitter functions
+#Create variable movie_search_terms to to store 3 strings of movies to search for using the get_OMDB_data function above
+movie_search_terms = ["The Dark Knight", "Captain America: Civil War", "The Big Short"]
+
+#Create a list of dictionaries called movie_info containing movie data from the movie_search_terms movies
+movie_info = []
+for movie in movie_search_terms:
+        movie_info.append(get_OMDB_data(movie))
+
+#Create a list of the top paid actor from each of the movies called top_actors, list comprehension
+top_actors = [dictionary['Actors'].split(",")[0] for dictionary in movie_info]
+
+#Create a dictionary called top_actor_tweets containing movie data from the movie_search_terms movies
+top_actor_tweets = {}
+for actor in top_actors:
+        top_actor_tweets[actor] = get_twitter_search_data(actor)
+
+#print(top_actor_tweets["Christian Bale"]["statuses"][:5])
+
+#Create a list of users that are mentioned in any of the tweets in top_actor_tweets called neighborhood_users
+neighborhood_users = []
+for actor in top_actors:
+        for status in top_actor_tweets[actor]["statuses"]:
+                neighborhood_users.append(status['user']['id_str'])
+
+#Get twitter data about all neighborhood_users and store in a list variable called user_data
+user_data = []
+for user in neighborhood_users:
+        user_data.append(get_twitter_user_data(user))
 
 
 
 
-
-# TODO all database stuff below
 #Start database implementation here
+#Setup the connection and drop tables Tweets, Users, and Movies if they exist
+conn = sqlite3.connect('final_project.db')
+cur = conn.cursor()
 
-    #Setup the connection
+dropStatement = 'DROP TABLE IF EXISTS Tweets'
+cur.execute(dropStatement)
+dropStatement = 'DROP TABLE IF EXISTS Movies'
+cur.execute(dropStatement)
+dropStatement = 'DROP TABLE IF EXISTS Users'
+cur.execute(dropStatement)
 
-    #CREATE TABLE Tweets
+#CREATE TABLE Users
+#Properties: user_id(primary key), screen_name, num_favorites_made, desciption
+createStatement = 'CREATE TABLE IF NOT EXISTS Users '
+createStatement += '(user_id TEXT PRIMARY KEY, '
+createStatement += 'screen_name TEXT, '
+createStatement += 'num_favorites_made INTEGER, '
+createStatement += 'description TEXT)'
+cur.execute(createStatement)
 
-    #CREATE TABLE Users
+#CREATE TABLE Movies
+#Properties: movie_id(primary key), title, director, num_languages, imdb_rating, top_billed_actor
+createStatement = 'CREATE TABLE IF NOT EXISTS Movies '
+createStatement += '(movie_id TEXT PRIMARY KEY, '
+createStatement += 'title TEXT, '
+createStatement += 'director INTEGER, '
+createStatement += 'num_languages INTEGER, '
+createStatement += 'imdb_rating REAL, '
+createStatement += 'top_billed_actor TEXT)'
+cur.execute(createStatement)
 
-    #CREATE TABLE Movies
+#CREATE TABLE Tweets
+#Properties: text, tweet_id(primary key), user_id, movie_id, num_favorites, num_retweets
+createStatement = 'CREATE TABLE IF NOT EXISTS Tweets '
+createStatement += '(text TEXT, '
+createStatement += 'tweet_id TEXT PRIMARY KEY, '
+createStatement += 'user_id TEXT, '
+createStatement += 'movie_id INTEGER, '
+createStatement += 'num_favorites INTEGER, '
+createStatement += 'num_retweets INTEGER, '
+createStatement += 'FOREIGN KEY (user_id) REFERENCES Users(user_id),'
+createStatement += 'FOREIGN KEY (movie_id) REFERENCES Movies(user_id))'
+cur.execute(createStatement)
 
-    #TODO load data with useful info and primary key
-    #Load data into all databases
+conn.commit()
+#Load data into Users database from the user_data variable defined earlier, user_id will be the primary key
+for user in user_data:
+    select_sql = "SELECT * FROM Users WHERE user_id = ?"
+    cur.execute(select_sql, (user["id_str"],))
+    if not cur.fetchone():
+        info = []
+        insertStatement = 'INSERT INTO Users VALUES (?, ?, ?, ?)'
+        info.append(user["id_str"])
+        info.append(user["screen_name"])
+        info.append(user["favourites_count"])
+        info.append(user["description"])
+        cur.execute(insertStatement, info)
+        conn.commit()
 
+#Load data into Tweets database
+
+#Load data into Movies database
 
 
 
@@ -226,7 +277,7 @@ class DatabaseTests(unittest.TestCase):
         cur = conn.cursor()
         cur.execute('SELECT * FROM Users')
         result = cur.fetchall()
-        self.assertEqual(len(result[0]), 3)
+        self.assertEqual(len(result[0]), 4)
         conn.close()
     def test_tweets_db_columns(self):
         conn = sqlite3.connect('final_project.db')
