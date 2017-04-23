@@ -106,10 +106,11 @@ class Movie(object):
 
     #Constructor here
     def __init__(self, structured_data):
+        self.movie_id = structured_data["imdbID"]
         self.title = structured_data["Title"]
         self.director = structured_data["Director"]
         self.imdb_rating = structured_data["imdbRating"]
-        self.languages = structured_data["Language"]
+        self.languages = structured_data["Language"].split(",")
         self.actors = [actor for actor in structured_data["Actors"].split(",")]
         return
 
@@ -149,32 +150,36 @@ movie_search_terms = ["The Dark Knight", "Captain America: Civil War", "The Big 
 #Create a list of dictionaries called movie_info containing movie data from the movie_search_terms movies, List Comprehension
 movie_info = [get_OMDB_data(movie) for movie in movie_search_terms]
 
-#Create a list of instances of the class Movie using the movie_info list
+#Create a list of instances of the class Movie using the movie_info list, List Comprehension
 movie_instance_list = [Movie(structured_data) for structured_data in movie_info]
 
 #Create a list of the top paid actor from each of the movies called top_actors, list comprehension
-top_actors = [dictionary['Actors'].split(",")[0] for dictionary in movie_info]
+top_actors = [movie.get_actors()[0] for movie in movie_instance_list]
 
-#Create a dictionary called top_actor_tweets containing movie data from the movie_search_terms movies
-top_actor_tweets = {}
+#Create a dictionary of which actor search came from which movie, Dictionary Comprehension
+actor_movie_relation = {actor: movie.movie_id for actor, movie in zip(top_actors, movie_instance_list)}
+
+#Create a list of Tweet dictionaries called top_actor_tweets, also add a actor key and value pair to the dictionary
+top_actor_tweets = []
 for actor in top_actors:
-        top_actor_tweets[actor] = get_twitter_search_data(actor)
-
-#print(top_actor_tweets["Christian Bale"]["statuses"][:5])
+        for status in get_twitter_search_data(actor)["statuses"]:
+                status["actor_SI206"] = actor
+                top_actor_tweets.append(status)
 
 #Create a list of users that are mentioned in any of the tweets in top_actor_tweets called neighborhood_users
 neighborhood_users = []
-for actor in top_actors:
-        for status in top_actor_tweets[actor]["statuses"]:
-                neighborhood_users.append(status['user']['id_str'])
+for tweet in top_actor_tweets:
+        user = tweet["user"]
+        if user["screen_name"] not in neighborhood_users:
+                neighborhood_users.append(user["screen_name"])
+        for user in tweet["entities"]["user_mentions"]:
+                if user["screen_name"] not in neighborhood_users:
+                        neighborhood_users.append(user["screen_name"])
 
-#Get twitter data about all neighborhood_users and store in a list variable called user_data
+#Get a twitter dict from all neighborhood_users and store in a list variable called user_data
 user_data = []
 for user in neighborhood_users:
         user_data.append(get_twitter_user_data(user))
-
-
-
 
 #Start database implementation here
 #Setup the connection and drop tables Tweets, Users, and Movies if they exist
@@ -218,7 +223,7 @@ createStatement += 'movie_id INTEGER, '
 createStatement += 'num_favorites INTEGER, '
 createStatement += 'num_retweets INTEGER, '
 createStatement += 'FOREIGN KEY (user_id) REFERENCES Users(user_id),'
-createStatement += 'FOREIGN KEY (movie_id) REFERENCES Movies(user_id))'
+createStatement += 'FOREIGN KEY (movie_id) REFERENCES Movies(movie_id))'
 cur.execute(createStatement)
 
 conn.commit()
@@ -236,26 +241,73 @@ for user in user_data:
         cur.execute(insertStatement, info)
         conn.commit()
 
-#Load data into Tweets database
-
 #Load data into Movies database
+for movie in movie_instance_list:
+    select_sql = "SELECT * FROM Movies WHERE movie_id = ?"
+    cur.execute(select_sql, (movie.movie_id,))
+    if not cur.fetchone():
+        info = []
+        insertStatement = 'INSERT INTO Movies VALUES (?, ?, ?, ?, ?, ?)'
+        info.append(movie.movie_id)
+        info.append(movie.title)
+        info.append(movie.director)
+        info.append(len(movie.languages))
+        info.append(movie.imdb_rating)
+        info.append(movie.get_actors()[0])
+        cur.execute(insertStatement, info)
+        conn.commit()
+
+#Load data into Tweets database
+for tweet in top_actor_tweets:
+#Properties: text, tweet_id(primary key), user_id, movie_id, num_favorites, num_retweets
+    select_sql = "SELECT * FROM Tweets WHERE tweet_id = ?"
+    cur.execute(select_sql, (tweet["id_str"],))
+    if not cur.fetchone():
+        info = []
+        insertStatement = 'INSERT INTO Tweets VALUES (?, ?, ?, ?, ?, ?)'
+        info.append(tweet["text"])
+        info.append(tweet["id_str"])
+        info.append(tweet["user"]["id_str"])
+        info.append(actor_movie_relation[tweet["actor_SI206"]])
+        info.append(tweet["favorite_count"])
+        info.append(tweet["retweet_count"])
+        cur.execute(insertStatement, info)
+        conn.commit()
+
+#TODO test for foreign key
 
 
 
 #Define variable to store a list of users queried from the database (List Comprehension)
+select_sql = "SELECT user_id FROM Users"
+cur.execute(select_sql)
+db_users = [tup[0] for tup in cur.fetchall()]
 
-#Define a dictionary to store user, list of tweet pairs (Dictionary Comprehension)
+#Define a dictionary to store user, list of tweet pairs (Dictionary Comprehension). Only the most favorited tweet of each user is saved
+select_sql = "SELECT U.screen_name, T.text, T.num_favorites FROM Tweets T INNER JOIN Users U ON T.user_id = U.user_id ORDER BY T.num_favorites ASC"
+cur.execute(select_sql)
+db_user_tweets = {tup[0]: tup[1] for tup in cur.fetchall()}
+print(db_user_tweets)
 
+#Define a variable db_movie_retweets that joins the Movie and Tweets table and finds amount of retweets about the star actor of the movie, Dictionary Comprehension
+select_sql = "SELECT M.title, SUM (T.num_retweets) FROM Tweets T INNER JOIN Movies M ON M.movie_id = T.movie_id GROUP BY M.title"
+cur.execute(select_sql)
+db_movie_top_actor_retweets = {tup[0]: tup[1] for tup in cur.fetchall()}
+
+#Get tweets with greater than 50 retweets from movies with a rating higher than 8
+select_sql = "SELECT T.text FROM Tweets T INNER JOIN Movies M ON M.movie_id = T.movie_id WHERE T.num_retweets > 50 AND M.imdb_rating > 8"
+cur.execute(select_sql)
+db_good_tweets_and_movies = [tweet for tweet in cur.fetchall()]
+print(db_good_tweets_and_movies)
 
 
 
 
 #Output all gained information into a text file
 
-    #Movie searched for with highest rating
+#Movie searched for with highest rating
 
-    #User with the most retweeted tweet from a movie
-
+#User with the most retweeted tweet about the top actor of a movie
 
 
 
