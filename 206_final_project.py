@@ -39,7 +39,7 @@ api = tweepy.API(auth, parser=tweepy.parsers.JSONParser())
 
 #Set up the caching structure here and define a cache file name variable
 #Taken from my project 3 code
-CACHE_FNAME = "SI206_final_project_cache.json"
+CACHE_FNAME = "206_final_project_cache.json"
 # Put the rest of your caching setup here:
 try:
 	cache_file = open(CACHE_FNAME,'r')
@@ -95,11 +95,6 @@ def get_OMDB_data(search_term):
         cache_file.close()
     return response
 
-
-
-
-
-
 #Define the Movie class here
 class Movie(object):
     #Define the instance variables, title, director, imdb rating, languages and actors here
@@ -126,23 +121,6 @@ class Movie(object):
                 break
             actors_returned.append(actor)
         return actors_returned
-
-
-#TODO define these classes below
-#Define the Tweet class here, the variables and methods are still to be determined
-class Tweet(object):
-    def __init__(self):
-        return
-
-
-#Define the TwitterUser class here, the variables and methods are still to be determined
-class TwitterUser(object):
-    def __init__(self):
-        return
-
-
-
-
 
 #Create variable movie_search_terms to to store 3 strings of movies to search for using the get_OMDB_data function above
 movie_search_terms = ["The Dark Knight", "Captain America: Civil War", "The Big Short"]
@@ -222,7 +200,7 @@ createStatement += 'user_id TEXT, '
 createStatement += 'movie_id INTEGER, '
 createStatement += 'num_favorites INTEGER, '
 createStatement += 'num_retweets INTEGER, '
-createStatement += 'FOREIGN KEY (user_id) REFERENCES Users(user_id),'
+createStatement += 'FOREIGN KEY (user_id) REFERENCES Users(user_id), '
 createStatement += 'FOREIGN KEY (movie_id) REFERENCES Movies(movie_id))'
 cur.execute(createStatement)
 
@@ -249,7 +227,7 @@ for movie in movie_instance_list:
         info = []
         insertStatement = 'INSERT INTO Movies VALUES (?, ?, ?, ?, ?, ?)'
         info.append(movie.movie_id)
-        info.append(movie.title)
+        info.append(movie.__str__())
         info.append(movie.director)
         info.append(len(movie.languages))
         info.append(movie.imdb_rating)
@@ -274,52 +252,94 @@ for tweet in top_actor_tweets:
         cur.execute(insertStatement, info)
         conn.commit()
 
-#TODO test for foreign key
-
-
-
-#Define variable to store a list of users queried from the database (List Comprehension)
-select_sql = "SELECT user_id FROM Users"
-cur.execute(select_sql)
-db_users = [tup[0] for tup in cur.fetchall()]
-
 #Define a dictionary to store user, list of tweet pairs (Dictionary Comprehension). Only the most favorited tweet of each user is saved
 select_sql = "SELECT U.screen_name, T.text, T.num_favorites FROM Tweets T INNER JOIN Users U ON T.user_id = U.user_id ORDER BY T.num_favorites ASC"
 cur.execute(select_sql)
 db_user_tweets = {tup[0]: tup[1] for tup in cur.fetchall()}
-print(db_user_tweets)
+
 
 #Define a variable db_movie_retweets that joins the Movie and Tweets table and finds amount of retweets about the star actor of the movie, Dictionary Comprehension
 select_sql = "SELECT M.title, SUM (T.num_retweets) FROM Tweets T INNER JOIN Movies M ON M.movie_id = T.movie_id GROUP BY M.title"
 cur.execute(select_sql)
 db_movie_top_actor_retweets = {tup[0]: tup[1] for tup in cur.fetchall()}
 
-#Get tweets with greater than 50 retweets from movies with a rating higher than 8
+#Get tweets with greater than 50 retweets from movies with a rating higher than 8, List Comprehension
 select_sql = "SELECT T.text FROM Tweets T INNER JOIN Movies M ON M.movie_id = T.movie_id WHERE T.num_retweets > 50 AND M.imdb_rating > 8"
 cur.execute(select_sql)
-db_good_tweets_and_movies = [tweet for tweet in cur.fetchall()]
-print(db_good_tweets_and_movies)
+db_good_tweets_and_movies = [tup[0] for tup in cur.fetchall()]
 
+#Find the most commonly used letter in all of the tweets using the Counter object from Collections
+select_sql = "SELECT T.text FROM Tweets T"
+cur.execute(select_sql)
+db_all_tweets = [tup[0] for tup in cur.fetchall()]
+cnt = collections.Counter()
+for tweet in db_all_tweets:
+    for char in tweet:
+        if char != " ":
+            cnt[char] += 1
+db_most_commonly_used_letter = cnt.most_common(3)
 
+#Sort all users based on the amount of favorites they have made, this can be a way to tell how active they are, then return the top 3 most active users. This sorting with a key parameter
+select_sql = "SELECT screen_name, num_favorites_made FROM Users"
+cur.execute(select_sql)
+users_favorites_tuple = cur.fetchall()
+sorted_users_favorites = sorted(users_favorites_tuple, key=lambda x: x[1], reverse=True)
+top_3_sorted_users_favorites = sorted_users_favorites[:3]
 
 
 #Output all gained information into a text file
+output = ""
+for movie in movie_instance_list:
+        output += movie.title + "\n"
+output += "\nTwitter Summary"
+output += "\n4/23/2017\n\n"
 
-#Movie searched for with highest rating
+output += "#"*100 + "\n"
 
-#User with the most retweeted tweet about the top actor of a movie
+output += "The amount of retweets about the star actor of each movie: \n\n"
+for key in db_movie_top_actor_retweets:
+        output += key + ": " + str(db_movie_top_actor_retweets[key]) + "\n" + "-"*50 + "\n"
+output += "\n"
 
+output += "#"*100 + "\n"
 
+output += "Tweets with greater than 50 retweets from movies with a rating higher than 8: \n\n"
+for tweet in db_good_tweets_and_movies:
+        output += tweet + "\n" + "-"*50 + "\n"
+output += "\n"
+
+output += "#"*100 + "\n"
+
+output += "Each user's most favorited tweet about the top actor: \n\n"
+for key in db_user_tweets:
+        output += key + ": " + db_user_tweets[key] + "\n" + "-"*50 + "\n"
+output += "\n"
+
+output += "#"*100 + "\n"
+
+output += "Top 3 most common characters: \n\n"
+for tup in db_most_commonly_used_letter:
+    output += tup[0] + " has " + str(tup[1]) + " occurences"
+    output += "\n"
+output += "\n"
+
+output += "#"*100 + "\n"
+
+output += "Top 3 most active users from the database: \n\n"
+for tup in top_3_sorted_users_favorites:
+    output += tup[0] + " has made " + str(tup[1]) + " favorites"
+    output += "\n"
+output += "\n"
+
+output += "#"*100 + "\n"
+
+f = open("output.txt", 'w')
+f.write(output)
+f.close()
 
 #Close the database connection here
 conn.commit()
 conn.close()
-
-
-
-
-
-
 
 # Put your tests here, with any edits you now need from when you turned them in with your project plan.
 
@@ -362,8 +382,16 @@ class DatabaseTests(unittest.TestCase):
         conn.close()
 
 class ResultsTests(unittest.TestCase):
-    def test_user_tweet_dict(self):
-        self.assertEqual(type(user_tweet_dict), type({"uid":["tweet", "tweet"], "uid":["tweet", "tweet"]}) )
+    def test_top_actor_retweets(self):
+        self.assertEqual(len(db_movie_top_actor_retweets), 3)
+    def test_get_twitter_search_data(self):
+        response = get_twitter_search_data("twitter")
+        # tests that the dictionary contains keys and values
+        self.assertEqual(bool(response), True)
+    def test_get_twitter_user_data(self):
+        response = get_twitter_user_data("umsi")
+        # tests that the dictionary contains keys and values
+        self.assertEqual(bool(response), True)
 
 # Remember to invoke your tests so they will run! (Recommend using the verbosity=2 argument.)
 if __name__ == "__main__":
