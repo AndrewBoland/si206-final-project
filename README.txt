@@ -1,3 +1,5 @@
+Note: This file looks much nicer as a markdown file, which is included in the zip file
+
 # What option?
 ##################################################
 Option 2
@@ -22,8 +24,15 @@ Run the command: python 206_final_project.py
     - File containing all final database data
 ## output.txt
     - Final output of 206_final_project.py
+
+## 206_data_access.py
+    - The second checkpoint file to this project, just sets up the caching methods and some tests
 ## 206_final_project_cache.json
     - Dictionary file used for caching API data
+## 206_finalproject_plan.txt
+    - Outline of my initial project plan
+## 206_project_plan.py
+    - Initial project plan program with tests
 
 # Function Descriptions
 ##################################################

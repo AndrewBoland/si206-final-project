@@ -353,10 +353,18 @@ class MovieTests(unittest.TestCase):
         self.assertEqual(type(movie.actors), type(["actor1", "actor2"]))
     def test_movie_get_actors(self):
         movie = Movie(self.structured_data)
-        self.assertEqual(movie.get_actors(1), ["Christian Bale"])
+        self.assertEqual(movie.get_actors(), ["Christian Bale"])
+    def test_movie_get_actors_2(self):
+        movie = Movie(self.structured_data)
+        # makes sure 4 actors are returned, because onlly 4 are given from OMDB
+        self.assertEqual(len(movie.get_actors(20)), 4)
     def test_movie_str(self):
         movie = Movie(self.structured_data)
         self.assertEqual(movie.__str__(), "The Dark Knight Rises, directed by Christopher Nolan")
+    def test_movie_str_2(self):
+        movie = Movie(self.structured_data)
+        # tests that the director is contained in the returned string
+        self.assertNotEqual(movie.__str__().index(movie.director), -1)
 
 class DatabaseTests(unittest.TestCase):
     def test_movie_db_columns(self):
@@ -388,10 +396,26 @@ class ResultsTests(unittest.TestCase):
         response = get_twitter_search_data("twitter")
         # tests that the dictionary contains keys and values
         self.assertEqual(bool(response), True)
+    def test_get_twitter_search_data_2(self):
+        response = get_twitter_search_data("twitter")
+        # tests that the response is saved in the cache file
+        self.assertEqual(response, CACHE_DICTION["Twitter"]["Search"]["twitter"])
     def test_get_twitter_user_data(self):
         response = get_twitter_user_data("umsi")
         # tests that the dictionary contains keys and values
         self.assertEqual(bool(response), True)
+    def test_get_twitter_user_data_2(self):
+        response = get_twitter_user_data("umsi")
+        # tests that the response is saved in the cache file
+        self.assertEqual(response, CACHE_DICTION["Twitter"]["User"]["umsi"])
+    def test_get_OMDB_data(self):
+        response = get_OMDB_data("The Dark Knight")
+        # tests that the dictionary contains keys and values
+        self.assertEqual(bool(response), True)
+    def test_get_OMDB_data_2(self):
+        response = get_OMDB_data("The Dark Knight")
+        # tests that the response is saved in the cache file
+        self.assertEqual(response, CACHE_DICTION["OMDB"]["The Dark Knight"])
 
 # Remember to invoke your tests so they will run! (Recommend using the verbosity=2 argument.)
 if __name__ == "__main__":
